@@ -7,9 +7,10 @@ import { sortByCloseness, groupByField } from "./grouping.js";
  * Rank a full set of Parallels by Closeness, highest first. Called once per
  * search; "Show 6 more" then walks down this ordering without re-ranking.
  *
- * This is the seam ticket #3 replaces with the real embedding-similarity
- * ranker (`rankParallels` against the Challenge Embedding); the stub just
- * orders the fixture.
+ * Ticket #3 built the real embedding-similarity ranker as the like-named
+ * {@link import("./ranker.js").rankParallels}, which ranks the Corpus against
+ * the Challenge Embedding. Ticket #6 wires that in and deletes this stub; until
+ * then the stub just orders the fixture.
  *
  * @param {Parallel[]} parallels
  * @returns {Parallel[]}
