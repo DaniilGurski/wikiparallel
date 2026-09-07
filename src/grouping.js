@@ -5,7 +5,6 @@ import { FIELDS } from "./fields.js";
 /** How many Parallels a search shows at once, and how many "Show 6 more" adds. */
 export const PAGE_SIZE = 6;
 
-const fieldOrder = new Map(FIELDS.map((field, i) => [field, i]));
 
 /**
  * A copy of `parallels` ordered by Closeness, highest first. Ties break by
@@ -27,12 +26,22 @@ export function sortByCloseness(parallels) {
 
 /**
  * Bucket Parallels by Field for display. Each group's Parallels are ordered by
- * Closeness, highest first; the groups themselves follow the canonical Field
- * order, so a group keeps its place on the page as "Show 6 more" adds Parallels.
+ * Closeness, highest first; the groups themselves follow `order`, so a group
+ * keeps its place on the page as "Show 6 more" adds Parallels.
+ *
+ * `order` is the canonical Field order — {@link import("./fields.js").fieldsFromCorpus}
+ * in the running app, defaulting to {@link FIELDS} for unit tests. A Field not
+ * in `order` sorts after every listed Field, keeping it visible rather than
+ * jumping to the top.
+ *
  * @param {Parallel[]} parallels
+ * @param {readonly string[]} [order]
  * @returns {FieldGroup[]}
  */
-export function groupByField(parallels) {
+export function groupByField(parallels, order = FIELDS) {
+  const rank = new Map(order.map((field, i) => [field, i]));
+  const after = order.length;
+
   /** @type {Map<string, Parallel[]>} */
   const buckets = new Map();
   for (const p of parallels) {
@@ -43,5 +52,5 @@ export function groupByField(parallels) {
 
   return [...buckets.entries()]
     .map(([field, group]) => ({ field, parallels: sortByCloseness(group) }))
-    .sort((a, b) => (fieldOrder.get(a.field) ?? 0) - (fieldOrder.get(b.field) ?? 0));
+    .sort((a, b) => (rank.get(a.field) ?? after) - (rank.get(b.field) ?? after));
 }

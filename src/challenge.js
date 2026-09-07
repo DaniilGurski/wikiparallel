@@ -1,4 +1,4 @@
-import { isField } from "./fields.js";
+import { FIELDS } from "./fields.js";
 
 /**
  * The longest Challenge the tool accepts. Stray paste or a wall of text is
@@ -33,11 +33,18 @@ export function countWords(text) {
 /**
  * Whether a search may run: the Challenge has at least
  * {@link MIN_CHALLENGE_WORDS} words and a real Home Field is chosen.
+ *
+ * The valid Home Fields come from the loaded Corpus (see
+ * {@link import("./fields.js").fieldsFromCorpus}); `fields` defaults to
+ * {@link FIELDS} for the shell's pre-load state and for unit tests.
+ *
  * @param {{ challenge: string, homeField: string }} input
+ * @param {readonly string[]} [fields]
  * @returns {boolean}
  */
-export function challengeReady({ challenge, homeField }) {
+export function challengeReady({ challenge, homeField }, fields = FIELDS) {
   return (
-    countWords(normalizeChallenge(challenge)) >= MIN_CHALLENGE_WORDS && isField(homeField)
+    countWords(normalizeChallenge(challenge)) >= MIN_CHALLENGE_WORDS &&
+    fields.includes(homeField)
   );
 }

@@ -145,6 +145,28 @@ textarea {
   cursor: not-allowed;
 }
 
+/* Model download ------------------------------------------------------------ */
+
+.model-status {
+  margin-bottom: 2rem;
+  padding: 0.9rem 1rem;
+  background: var(--paper-tint);
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+}
+
+.model-status__text {
+  margin: 0 0 0.5rem;
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.model-status__bar {
+  width: 100%;
+  height: 0.6rem;
+}
+
 /* Results -------------------------------------------------------------------- */
 
 .parallels-empty {
@@ -251,8 +273,8 @@ textarea {
   --field-color: #4d7ca6;
   --field-tint: #e8f0f6;
 }
-.field-tag--health-and-medicine,
-.field-group__heading--health-and-medicine {
+.field-tag--health-medicine-and-disease,
+.field-group__heading--health-medicine-and-disease {
   --field-color: #b45b5b;
   --field-tint: #f7eaea;
 }

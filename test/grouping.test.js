@@ -48,3 +48,21 @@ test("groupByField orders groups by canonical Field order, not by Closeness", ()
   // Canonical Field order runs History, Arts, Science regardless of Closeness.
   assert.deepEqual(groups.map((g) => g.field), ["History", "Arts", "Science"]);
 });
+
+test("groupByField follows a supplied Field order", () => {
+  const parallels = [
+    parallel({ field: "Science", closeness: 50 }),
+    parallel({ field: "Arts", closeness: 99 }),
+    parallel({ field: "History", closeness: 70 }),
+  ];
+  const groups = groupByField(parallels, ["Arts", "Science", "History"]);
+  assert.deepEqual(groups.map((g) => g.field), ["Arts", "Science", "History"]);
+});
+
+test("groupByField keeps a Field missing from the order after the listed ones", () => {
+  const groups = groupByField(
+    [parallel({ field: "Mystery", closeness: 99 }), parallel({ field: "Arts", closeness: 10 })],
+    ["Arts", "Science"],
+  );
+  assert.deepEqual(groups.map((g) => g.field), ["Arts", "Mystery"]);
+});

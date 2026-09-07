@@ -4,13 +4,20 @@ import { FIELDS, fieldSlug } from "./fields.js";
 /** @typedef {import("./grouping.js").FieldGroup} FieldGroup */
 
 /**
- * Fill a `<select>` with the eleven Fields, keeping whatever placeholder
- * `<option value="">` it already has as the first entry.
+ * Fill a `<select>` with the given Fields, keeping whatever placeholder
+ * `<option value="">` it already has as the first entry. Re-runnable: any
+ * previously added Field options are replaced, so the shell can render
+ * {@link FIELDS} immediately and then swap in the Corpus's Fields once loaded.
+ *
  * @param {HTMLSelectElement} select
+ * @param {readonly string[]} [fields]
  */
-export function populateHomeFieldOptions(select) {
+export function populateHomeFieldOptions(select, fields = FIELDS) {
+  for (const option of [...select.options]) {
+    if (option.value !== "") option.remove();
+  }
   const fragment = document.createDocumentFragment();
-  for (const field of FIELDS) {
+  for (const field of fields) {
     const option = document.createElement("option");
     option.value = field;
     option.textContent = field;

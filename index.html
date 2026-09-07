@@ -61,6 +61,19 @@
           </button>
         </form>
 
+        <div
+          id="model-status"
+          class="model-status"
+          role="status"
+          aria-live="polite"
+          hidden
+        >
+          <p id="model-status-text" class="model-status__text">
+            Downloading the embedding model (first visit only)…
+          </p>
+          <progress id="model-status-bar" class="model-status__bar" max="100"></progress>
+        </div>
+
         <section
           id="parallels"
           class="parallels"

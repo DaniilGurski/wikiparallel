@@ -19,10 +19,13 @@ _Avoid_: match, result, hit, analogy
 
 **Field**:
 One of the 11 top-level sections of the Vital Articles Level 3 list: People,
-History, Geography, Arts, Philosophy and religion, Everyday life, Society and
-social sciences, Health and medicine, Science, Technology, Mathematics. Every
-Corpus article belongs to exactly one Field, taken from the section it appears
-under. The exact names are read from the live list at build time.
+History, Geography, Arts, Everyday life, Philosophy and religion, Society and
+social sciences, Health, medicine and disease, Science, Technology, Mathematics.
+Every Corpus article belongs to exactly one Field, taken from the section it
+appears under. The exact names and their order are read from the live list at
+build time and stored on every `corpus.json` record; the running app takes its
+Field list from the loaded Corpus (`src/fields.js` holds only a fallback for the
+moment before it loads).
 _Avoid_: domain, discipline, category, topic
 
 **Home Field**:

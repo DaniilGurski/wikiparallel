@@ -44,3 +44,10 @@ test("challengeReady requires at least MIN_CHALLENGE_WORDS words and a real Home
   // whitespace-padded Challenge still counts as three words
   assert.equal(challengeReady({ challenge: "   a  sudden  surge  ", homeField: "Science" }), true);
 });
+
+test("challengeReady validates the Home Field against a supplied Field list", () => {
+  const fields = ["Widgets", "Gadgets"];
+  assert.equal(challengeReady({ challenge: "a sudden surge of x", homeField: "Widgets" }, fields), true);
+  // "Science" is a fallback Field but not in this Corpus's Fields
+  assert.equal(challengeReady({ challenge: "a sudden surge of x", homeField: "Science" }, fields), false);
+});

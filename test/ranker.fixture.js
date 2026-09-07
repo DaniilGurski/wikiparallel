@@ -40,7 +40,7 @@ const article = (title, field, sim) => ({
  *   0.95 Homeostasis            Science
  *   0.92 Control theory         Mathematics
  *   0.88 Jazz improvisation     Arts
- *   0.82 Triage                 Health and medicine
+ *   0.82 Triage                 Health, medicine and disease
  *   0.80 Immune system          Science
  *   0.75 Berlin Blockade        History
  *   0.70 Queueing theory        Mathematics
@@ -49,7 +49,7 @@ const article = (title, field, sim) => ({
  *   0.50 Percolation theory     Mathematics
  *   0.45 Chiaroscuro            Arts
  *   0.40 Roman dictator         History
- *   0.35 Sepsis                 Health and medicine
+ *   0.35 Sepsis                 Health, medicine and disease
  *
  * @type {CorpusArticle[]}
  */
@@ -67,8 +67,8 @@ export const FIXTURE_CORPUS = [
   article("Chiaroscuro", "Arts", 0.45),
   article("Berlin Blockade", "History", 0.75),
   article("Roman dictator", "History", 0.4),
-  article("Triage", "Health and medicine", 0.82),
-  article("Sepsis", "Health and medicine", 0.35),
+  article("Triage", "Health, medicine and disease", 0.82),
+  article("Sepsis", "Health, medicine and disease", 0.35),
 ];
 
 /**

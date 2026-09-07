@@ -3,9 +3,11 @@
  * Level 3 list, in their list order. Every Corpus article — and so every
  * Parallel — belongs to exactly one of these.
  *
- * In the finished tool these names are read from the live list at build time
- * (see docs/adr/0002). The stubbed UI hard-codes them so the shell can be
- * built and reviewed before the build script exists.
+ * These names are read from the live list at build time (docs/adr/0002) and
+ * stored on every record in `corpus.json`, so the running app takes its Field
+ * list and order from the loaded Corpus via {@link fieldsFromCorpus}. This
+ * constant is only the shell's fallback for the moment before the Corpus has
+ * loaded; it is kept in step with the live list by hand.
  *
  * @type {readonly string[]}
  */
@@ -14,14 +16,32 @@ export const FIELDS = Object.freeze([
   "History",
   "Geography",
   "Arts",
-  "Philosophy and religion",
   "Everyday life",
+  "Philosophy and religion",
   "Society and social sciences",
-  "Health and medicine",
+  "Health, medicine and disease",
   "Science",
   "Technology",
   "Mathematics",
 ]);
+
+/**
+ * The Fields present in a loaded Corpus, in first-appearance order. The build
+ * preserves the live Vital Articles section order, so this is the canonical
+ * Field order for the running app — the Home Field dropdown and the grouped
+ * results both follow it.
+ *
+ * @param {readonly { field: string }[]} corpus
+ * @returns {string[]}
+ */
+export function fieldsFromCorpus(corpus) {
+  /** @type {string[]} */
+  const ordered = [];
+  for (const article of corpus) {
+    if (!ordered.includes(article.field)) ordered.push(article.field);
+  }
+  return ordered;
+}
 
 /** One of the eleven Field names. @typedef {(typeof FIELDS)[number]} Field */
 
