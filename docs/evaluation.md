@@ -123,6 +123,36 @@ article, so the ranker returns topical drift instead.
   articles (*Suicide*, *Afterlife* for "recovering after a shock") — glance at
   the output before a live demo.
 
+## Retrieval measurements behind ADR-0005
+
+Two one-off measurements were taken over the same 998-article `corpus.json` and
+the same eight Challenges, to decide whether the poor Parallels above could be
+fixed in the ranker. Both said no, which is why ADR-0005 changes the Bridge
+instead. Neither is part of `build/eval.mjs`; the numbers below are the record.
+
+**The Field spread is not the culprit.** For every Parallel shown, its rank in
+the *unconstrained* similarity order (Home Field excluded, no spread rule) was
+recorded. Every one fell in ranks #1–#12, the worst being *Great Depression* at
+#12; three of the eight Challenges returned a page identical to the
+unconstrained top 6. So the ADR-0003 spread rule is not reaching down the list to
+pull up weak candidates — it costs almost nothing here.
+
+**Similarity is close to flat, and hubs win.** Across the eight Challenges the
+cosine gap between the top-ranked article and the 200th ranked article was
+0.054–0.093 — five to nine points of Closeness spread over 200 articles.
+*Algorithm* alone appeared in the top 10 of 4 of the 8 Challenges.
+
+**Mean-centring makes it worse.** Subtracting the Corpus mean Embedding before
+the cosine (free: pure arithmetic on the vectors already in `corpus.json`) widens
+the #1–#200 gap to 0.195–0.346, which would make Closeness a genuinely useful
+ordering cue. But the ordering barely changes and hubness worsens: *Algorithm*
+rises to 5 of 8 Challenges, *Exponentiation* to 5 of 8, *Food preservation* to 3
+of 8, and new noise appears (*Myocardial infarction* and *Asthma* for "handling a
+sudden surge of users"). It buys a better-looking number attached to the same
+wrong articles, so it was not adopted. It remains available as a separate,
+honest fix for the compressed-band weak spot noted above, if that is ever worth
+doing on its own.
+
 ## Reproducing
 
 ```

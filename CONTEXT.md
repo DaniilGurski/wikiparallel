@@ -53,14 +53,22 @@ A rough ordering cue, not a probability or a quality score.
 _Avoid_: score, relevance, confidence, distance
 
 **Bridge**:
-A short account of the shared structure between a Challenge and one Parallel: a
-sentence naming the underlying problem both describe, plus two or three
+A short account of what a person could borrow from one Parallel: a sentence
+naming the underlying problem both it and the Challenge face, plus two or three
 correspondences pairing an element of the Challenge with an element of the
 article's subject. A Bridge is asked for one Parallel at a time and never exists
 before the person asks. It is a quick check on whether an article is worth
-reading, not an answer — it may be approximate, and when there is no real shared
-structure no Bridge is produced and the person is told so instead.
+reading, not an answer — it may be approximate, and it always carries a Strength
+saying how far to trust it.
 _Avoid_: explanation, reason, insight, analogy (reserved — see Parallel)
+
+**Strength**:
+How far a Bridge's shared structure holds, judged by the same model that wrote
+the Bridge: **strong** when the two share a real underlying mechanism, **loose**
+when the link is partial or rests on a shared topic or shared wording. Most
+Bridges are loose. A loose Bridge is still shown in full — the Strength tells the
+person how to read a Bridge, it never withholds one.
+_Avoid_: confidence, quality, weak, score (reserved — see Closeness)
 
 **Embedding**:
 The fixed-length vector produced from a piece of text by the one small model the

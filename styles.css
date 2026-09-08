@@ -405,9 +405,13 @@ textarea {
 }
 
 .parallel__bridge-pending,
-.parallel__bridge-weak {
+.parallel__bridge-strength {
   margin: 0.3rem 0;
   color: var(--ink-soft);
+}
+
+.parallel__bridge-strength--loose {
+  font-style: italic;
 }
 
 .parallel__bridge-summary {

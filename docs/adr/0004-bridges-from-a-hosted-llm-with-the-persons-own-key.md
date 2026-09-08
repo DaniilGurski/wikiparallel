@@ -1,5 +1,12 @@
 # Bridges come from a hosted LLM called with the person's own key
 
+> **Superseded in part by [ADR-0005](0005-bridges-are-graded-not-refused.md).**
+> The model no longer answers with "a verdict that the two have no real shared
+> structure": every Bridge now comes back graded `strong` or `loose` and is shown
+> in full. Both the sentence below describing that schema and the accepted cost
+> that leans on it are out of date. The decision itself — a hosted model called
+> from the browser with the person's own key — stands.
+
 A Bridge is generated on demand for a single Parallel by calling Anthropic's
 Messages API directly from the browser with a key the person supplies on a
 separate settings page and which is stored only in that browser. The model is

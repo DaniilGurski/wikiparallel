@@ -17,7 +17,7 @@ const html = await readFile(fileURLToPath(new URL("../index.html", import.meta.u
  * @type {import("../src/bridge.js").BridgeResult}
  */
 const CANNED_BRIDGE = {
-  kind: "bridge",
+  strength: "strong",
   summary: "Both keep a system serving demand it cannot fully meet.",
   correspondences: [
     { challenge: "your users", subject: "the body's cells" },
@@ -440,18 +440,36 @@ test("a Bridge renders its summary as a paragraph, its correspondences as a list
   assert.match(note?.textContent ?? "", /check it against the article/i);
 });
 
-test("a weak verdict renders a short 'no real parallel' message and no correspondences", async () => {
-  const weak = fakeBridgeGenerator({ kind: "weak", reason: "The two share only the word 'network'." });
-  ({ window, app } = await bootApp({ generateBridge: weak }));
+test("a loose Bridge is marked loose but still renders its correspondences", async () => {
+  const loose = fakeBridgeGenerator({
+    strength: "loose",
+    summary: "Only the vocabulary of 'networks' really carries over.",
+    correspondences: [{ challenge: "your servers", subject: "the nerve cells" }],
+  });
+  ({ window, app } = await bootApp({ generateBridge: loose }));
 
   await runSearch("handling a sudden surge of users", "Technology");
   clickBridge();
   await app.bridgesSettled();
 
   const card = window.document.querySelector(".parallel");
-  assert.match(card?.textContent ?? "", /No real parallel here/);
-  assert.equal(card?.querySelector(".parallel__bridge-correspondences"), null);
-  assert.equal(card?.querySelector(".parallel__bridge-note"), null, "no AI-generated line on a weak verdict");
+  assert.ok(card, "a card is on the page");
+  assert.ok(card.querySelector(".parallel__bridge-strength--loose"), "the card marks the Bridge loose");
+  assert.match(card.textContent ?? "", /Only the vocabulary/);
+  const items = [...card.querySelectorAll(".parallel__bridge-correspondences li")];
+  assert.equal(items.length, 1, "a loose Bridge is still a Bridge — no dead-end card");
+  assert.ok(card.querySelector(".parallel__bridge-note"), "generated-text line stays on a loose Bridge");
+});
+
+test("a strong Bridge carries no Strength marker", async () => {
+  ({ window, app } = await bootApp({ generateBridge: fakeBridgeGenerator() }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+
+  const card = window.document.querySelector(".parallel");
+  assert.equal(card?.querySelector(".parallel__bridge-strength"), null);
 });
 
 test("the generator is asked for the clicked Parallel with the Challenge, and not the Home Field", async () => {

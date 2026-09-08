@@ -1,13 +1,13 @@
 /**
  * The Bridge generator: given a Challenge and one Parallel, ask a hosted model
- * for a Bridge — the shared structure between the two — and parse the answer
- * into a discriminated result before anything else sees it (issue #14,
- * ADR-0004).
+ * for a Bridge — the shared structure between the two, and how far that
+ * structure actually holds — and parse the answer into a single result shape
+ * before anything else sees it (issue #14, ADR-0004, ADR-0005).
  *
  * The model is given the Challenge and the Parallel's title, Field, Lead Section
  * and section headings. It is deliberately **not** given the Home Field (which
  * hands a people-pleasing model a template to fill in) or the Closeness (which
- * would anchor the weak/strong call on the number that already forced this
+ * would anchor the loose/strong call on the number that already forced this
  * article in). `generateBridge`'s input carries neither, so there is nothing to
  * leak.
  *
@@ -29,13 +29,24 @@
  */
 
 /**
- * The parsed result the rest of the app sees. A discriminated union: a `bridge`
- * renders a summary paragraph and a list of correspondences; a `weak` verdict
- * renders a short "no real parallel here" message and nothing else. The weak
- * verdict replaces the Bridge; it never decorates one.
+ * How far the Bridge's shared structure actually holds. `strong` means the two
+ * share a real underlying mechanism; `loose` means the link is partial or rests
+ * on a shared topic rather than a shared mechanism. Most Bridges are `loose`,
+ * and that is a useful answer rather than a failed one (ADR-0005).
  *
- * @typedef {{ kind: "bridge", summary: string, correspondences: Correspondence[] }
- *   | { kind: "weak", reason: string }} BridgeResult
+ * @typedef {"strong" | "loose"} BridgeStrength
+ */
+
+/**
+ * The parsed result the rest of the app sees. One shape, always: every Bridge
+ * carries a summary, its correspondences, and the Strength saying how far the
+ * shared structure holds. There is no refusal — a Bridge the model thinks little
+ * of still shows its reasoning, marked `loose`, rather than becoming a dead end.
+ *
+ * @typedef {object} BridgeResult
+ * @property {BridgeStrength} strength
+ * @property {string} summary
+ * @property {Correspondence[]} correspondences
  */
 
 /**
@@ -67,30 +78,35 @@ export const BRIDGE_MODEL = "claude-opus-5";
  * module's job and nobody else's.
  */
 const SYSTEM_PROMPT = [
-  "You compare a person's Challenge with one Wikipedia article and describe the",
-  "shared structure between them — if there is one.",
+  "You compare a person's Challenge with one Wikipedia article and describe what",
+  "the person could borrow from that article.",
   "",
-  "A Bridge is one sentence naming the underlying problem that both the Challenge",
-  "and the article's subject describe, plus two or three correspondences. Each",
-  "correspondence pairs one concrete element of the Challenge with one concrete",
-  "element of the article's subject.",
+  "Always produce a Bridge: one sentence naming the underlying problem that both",
+  "the Challenge and the article's subject face, plus two or three",
+  "correspondences. Each correspondence pairs one concrete element of the",
+  "Challenge with one concrete element of the article's subject.",
   "",
-  "If the two share no real underlying structure — if the only link is loose",
-  "wording or a shared topic — do not invent a Bridge. Return a weak verdict with",
-  "a one-sentence reason instead. A weak verdict replaces the Bridge; never return",
-  "a Bridge you have hedged as weak.",
+  "Then judge your own Bridge and label how far its shared structure holds:",
+  '  "strong" — the two share a real underlying mechanism, and the',
+  "    correspondences hold up under scrutiny.",
+  '  "loose"  — the shared structure is partial, or rests on a shared topic or',
+  "    shared wording rather than a shared mechanism. Say so plainly in the",
+  "    summary instead of overselling it, and still give the correspondences: a",
+  "    loose Bridge is a starting point to think with, not a claim about the",
+  "    world.",
   "",
-  "Reply with a single JSON object and nothing else. For a Bridge:",
-  '  {"kind":"bridge","summary":"...","correspondences":[{"challenge":"...","subject":"..."}]}',
-  "For a weak verdict:",
-  '  {"kind":"weak","reason":"..."}',
+  "Most pairings are loose. That is expected and useful, so never upgrade a loose",
+  "Bridge to strong to seem more helpful.",
+  "",
+  "Reply with a single JSON object and nothing else:",
+  '  {"strength":"strong"|"loose","summary":"...",',
+  '   "correspondences":[{"challenge":"...","subject":"..."}]}',
 ].join("\n");
 
 /**
- * The JSON Schema the model answers under. One flat object with a `kind` field:
- * structured output does not carry a discriminated union cleanly, so the union
- * is reconstructed by {@link parseBridgeResult} after the response arrives — the
- * schema is a hint, not something this module trusts.
+ * The JSON Schema the model answers under. Every field is required, because
+ * every Bridge has all three — there is no branch of this schema that omits the
+ * correspondences.
  *
  * The exact `output_config.format` envelope and the SDK version that accepts it
  * must be checked against the live Anthropic docs before a demo (ADR-0004 says
@@ -101,14 +117,18 @@ const SYSTEM_PROMPT = [
 const BRIDGE_SCHEMA = {
   type: "object",
   properties: {
-    kind: { type: "string", enum: ["bridge", "weak"] },
+    strength: {
+      type: "string",
+      enum: ["strong", "loose"],
+      description: "How far the shared structure actually holds.",
+    },
     summary: {
       type: "string",
-      description: "For a bridge: one sentence naming the shared underlying problem.",
+      description: "One sentence naming the shared underlying problem.",
     },
     correspondences: {
       type: "array",
-      description: "For a bridge: two or three Challenge ↔ subject pairings.",
+      description: "Two or three Challenge ↔ subject pairings.",
       items: {
         type: "object",
         properties: {
@@ -119,17 +139,18 @@ const BRIDGE_SCHEMA = {
         additionalProperties: false,
       },
     },
-    reason: {
-      type: "string",
-      description: "For a weak verdict: one sentence on why there is no real parallel.",
-    },
   },
-  required: ["kind"],
+  required: ["strength", "summary", "correspondences"],
   additionalProperties: false,
 };
 
-/** The structured-output envelope passed as `output_config.format`. */
-const RESPONSE_FORMAT = { type: "json_schema", name: "bridge", schema: BRIDGE_SCHEMA };
+/**
+ * The structured-output envelope passed as `output_config.format`. For a JSON
+ * schema the Messages API takes exactly `type` and `schema` — a `name` alongside
+ * them is rejected with `400 output_config.format.name: Extra inputs are not
+ * permitted`.
+ */
+const RESPONSE_FORMAT = { type: "json_schema", schema: BRIDGE_SCHEMA };
 
 /**
  * Build the request params for one Bridge. Split out so a test can assert what
@@ -137,11 +158,14 @@ const RESPONSE_FORMAT = { type: "json_schema", name: "bridge", schema: BRIDGE_SC
  *
  * @param {BridgeRequest} request
  * @returns {{ model: string, max_tokens: number, system: string,
- *   output_config: object, messages: { role: string, content: string }[] }}
+ *   output_config: { effort: string, format: { type: string, schema: object } },
+ *   messages: { role: string, content: string }[] }}
  */
 export function buildBridgeRequest({ challenge, parallel }) {
   const headings =
-    parallel.headings.length > 0 ? parallel.headings.join("; ") : "(none listed)";
+    parallel.headings.length > 0
+      ? parallel.headings.join("; ")
+      : "(none listed)";
 
   const userText = [
     `Challenge:\n${challenge}`,
@@ -168,9 +192,11 @@ export function buildBridgeRequest({ challenge, parallel }) {
 
 /**
  * Pull the JSON object out of a Messages API response and narrow it to a
- * {@link BridgeResult}. A well-formed response becomes a Bridge or a weak
- * verdict; anything else throws, so the card shows a failure rather than a
- * half-rendered Bridge.
+ * {@link BridgeResult}. A response missing the substance of a Bridge — no
+ * summary, or no usable correspondences — throws, so the card shows a failure
+ * rather than a half-rendered Bridge. An unreadable `strength` does not throw:
+ * the Bridge itself is intact, so it degrades to `loose`, the label that
+ * understates rather than oversells.
  *
  * @param {any} message
  * @returns {BridgeResult}
@@ -197,31 +223,26 @@ export function parseBridgeResult(message) {
     throw new Error("The model’s response was not an object.");
   }
 
-  if (raw.kind === "weak") {
-    return {
-      kind: "weak",
-      reason: typeof raw.reason === "string" ? raw.reason.trim() : "",
-    };
+  const summary = typeof raw.summary === "string" ? raw.summary.trim() : "";
+  /** @type {any[]} */
+  const rawPairs = Array.isArray(raw.correspondences) ? raw.correspondences : [];
+  const correspondences = rawPairs
+    .map((pair) => ({
+      challenge:
+        typeof pair?.challenge === "string" ? pair.challenge.trim() : "",
+      subject: typeof pair?.subject === "string" ? pair.subject.trim() : "",
+    }))
+    .filter((pair) => pair.challenge !== "" && pair.subject !== "");
+
+  if (summary === "" || correspondences.length === 0) {
+    throw new Error("The model’s Bridge had no summary or no correspondences.");
   }
 
-  if (raw.kind === "bridge") {
-    const summary = typeof raw.summary === "string" ? raw.summary.trim() : "";
-    /** @type {any[]} */
-    const rawPairs = Array.isArray(raw.correspondences) ? raw.correspondences : [];
-    const correspondences = rawPairs
-      .map((pair) => ({
-        challenge: typeof pair?.challenge === "string" ? pair.challenge.trim() : "",
-        subject: typeof pair?.subject === "string" ? pair.subject.trim() : "",
-      }))
-      .filter((pair) => pair.challenge !== "" && pair.subject !== "");
-
-    if (summary === "" || correspondences.length === 0) {
-      throw new Error("The model’s Bridge had no summary or no correspondences.");
-    }
-    return { kind: "bridge", summary, correspondences };
-  }
-
-  throw new Error("The model’s response named neither a Bridge nor a weak verdict.");
+  return {
+    strength: raw.strength === "strong" ? "strong" : "loose",
+    summary,
+    correspondences,
+  };
 }
 
 /**
