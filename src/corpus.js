@@ -5,7 +5,9 @@
  * It fetches `corpus.json` (written by `npm run build`, see issue #5) and adapts
  * each on-disk record — whose Lead Section is stored as `leadText` — into the
  * {@link import("./ranker.js").CorpusArticle} shape the ranker consumes, where
- * the same text is `leadSection`.
+ * the same text is `leadSection`. The record's section `headings` pass straight
+ * through: the ranker copies them onto every Parallel so the Bridge generator
+ * (issue #14) can send them to the model.
  */
 
 /** Where the built Corpus sits, relative to `index.html`. */
@@ -90,6 +92,7 @@ function toArticle(record, index) {
     typeof record.url !== "string" ||
     typeof record.field !== "string" ||
     typeof record.leadText !== "string" ||
+    !Array.isArray(record.headings) ||
     !Array.isArray(record.embedding) ||
     record.embedding.length === 0
   ) {
@@ -102,6 +105,7 @@ function toArticle(record, index) {
     url: record.url,
     field: /** @type {import("./fields.js").Field} */ (record.field),
     leadSection: record.leadText,
+    headings: record.headings.map(String),
     embedding: record.embedding,
   };
 }

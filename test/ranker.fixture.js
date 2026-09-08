@@ -20,13 +20,15 @@ const embeddingAt = (sim) => [sim, Math.sqrt(1 - sim * sim)];
  * @param {string} title
  * @param {string} field
  * @param {number} sim  Similarity with {@link CHALLENGE}.
+ * @param {string[]} [headings]  The article's section headings.
  * @returns {CorpusArticle}
  */
-const article = (title, field, sim) => ({
+const article = (title, field, sim, headings = []) => ({
   title,
   url: `https://en.wikipedia.org/wiki/${title.replace(/ /g, "_")}`,
   field,
   leadSection: `Lead Section of ${title}.`,
+  headings,
   embedding: embeddingAt(sim),
 });
 
@@ -56,8 +58,8 @@ const article = (title, field, sim) => ({
 export const FIXTURE_CORPUS = [
   article("Load balancing", "Technology", 0.99),
   article("Circuit breaker design pattern", "Technology", 0.85),
-  article("Homeostasis", "Science", 0.95),
-  article("Immune system", "Science", 0.8),
+  article("Homeostasis", "Science", 0.95, ["Overview", "History", "Feedback loops"]),
+  article("Immune system", "Science", 0.8, ["Layered defense", "Innate immunity"]),
   article("Ecological resilience", "Science", 0.55),
   article("Control theory", "Mathematics", 0.92),
   article("Queueing theory", "Mathematics", 0.7),

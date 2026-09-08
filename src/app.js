@@ -9,6 +9,10 @@ import { populateHomeFieldOptions, renderGroups } from "./render.js";
 /** @typedef {import("./ranker.js").CorpusArticle} CorpusArticle */
 /** @typedef {import("./search.js").Parallel} Parallel */
 
+/** @typedef {import("./bridge.js").BridgeRequest} BridgeRequest */
+/** @typedef {import("./bridge.js").BridgeResult} BridgeResult */
+/** @typedef {import("./render.js").BridgeCardState} BridgeCardState */
+
 /**
  * @typedef {object} AppDeps
  * @property {Document} document
@@ -16,6 +20,10 @@ import { populateHomeFieldOptions, renderGroups } from "./render.js";
  *   or rejects (a {@link CorpusMissingError} when `corpus.json` is absent).
  * @property {(text: string, options?: { onProgress?: (event: object) => void }) => Promise<number[]>} embed
  *   Embeds the Challenge in the browser.
+ * @property {(request: BridgeRequest) => Promise<BridgeResult>} generateBridge
+ *   Asks a hosted model for a Bridge for one Parallel. Injected the same way as
+ *   {@link loadCorpus} and {@link embed}, so the feature is testable with a fake
+ *   and no test touches the network.
  */
 
 /**
@@ -24,6 +32,10 @@ import { populateHomeFieldOptions, renderGroups } from "./render.js";
  *   finishes, whether it succeeded or failed.
  * @property {() => Promise<unknown>} idle  Resolves when no search or "Show 6
  *   more" is in flight. Used by tests to await the async pipeline.
+ * @property {() => Promise<unknown>} bridgesSettled  Resolves when no Bridge
+ *   request is in flight. Bridge requests run off the search chain — a new
+ *   search must never wait on an abandoned generation — so tests await them
+ *   through this separate handle.
  */
 
 /**
@@ -35,7 +47,7 @@ import { populateHomeFieldOptions, renderGroups } from "./render.js";
  * @param {AppDeps} deps
  * @returns {AppHandle}
  */
-export function initApp({ document, loadCorpus, embed }) {
+export function initApp({ document, loadCorpus, embed, generateBridge }) {
   const form = /** @type {HTMLFormElement} */ (document.getElementById("search-form"));
   const challengeInput = /** @type {HTMLTextAreaElement} */ (document.getElementById("challenge"));
   const homeFieldSelect = /** @type {HTMLSelectElement} */ (document.getElementById("home-field"));
@@ -67,6 +79,13 @@ export function initApp({ document, loadCorpus, embed }) {
     hasMore: false,
     /** @type {boolean} Set once the model has finished loading. */
     modelReady: false,
+    /**
+     * Bridge state per Parallel, keyed by the article URL. Held here so a
+     * repaint — another Bridge arriving, or a "Show 6 more" — rebuilds every
+     * open Bridge from state instead of wiping it.
+     * @type {Map<string, BridgeCardState>}
+     */
+    bridges: new Map(),
   };
 
   // The shell shows the fallback Fields at once; the Corpus's own Field list
@@ -112,8 +131,53 @@ export function initApp({ document, loadCorpus, embed }) {
   }
 
   function paint() {
-    renderGroups(parallelsRegion, groupByField(state.shown, state.fields));
+    renderGroups(parallelsRegion, groupByField(state.shown, state.fields), (parallel) =>
+      state.bridges.get(parallel.url),
+    );
     showMoreButton.hidden = !state.hasMore;
+  }
+
+  /**
+   * Bridge requests in flight, so {@link AppHandle.bridgesSettled} can await them.
+   * @type {Set<Promise<unknown>>}
+   */
+  const bridgesInFlight = new Set();
+
+  /**
+   * Ask for a Bridge for the Parallel with `url`. Runs off the search chain
+   * (issue #12): it only writes into its own card, so a new search must not
+   * queue behind it.
+   * @param {string} url
+   */
+  function requestBridge(url) {
+    const parallel = state.shown.find((p) => p.url === url);
+    if (!parallel) return;
+
+    state.bridges.set(url, { status: "pending" });
+    paint();
+
+    const settle = (/** @type {BridgeCardState} */ next) => {
+      // Don't paint into a card that a fresh search has since removed.
+      if (!state.shown.includes(parallel)) return;
+      state.bridges.set(url, next);
+      paint();
+    };
+
+    const pending = Promise.resolve()
+      .then(() => generateBridge({ challenge: state.challenge, parallel }))
+      .then(
+        (result) => settle({ status: "ready", result }),
+        (error) =>
+          settle({
+            status: "error",
+            message: `Couldn’t generate a Bridge: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          }),
+      )
+      .finally(() => bridgesInFlight.delete(pending));
+
+    bridgesInFlight.add(pending);
   }
 
   /** @param {string} message */
@@ -152,6 +216,9 @@ export function initApp({ document, loadCorpus, embed }) {
     state.challengeEmbedding = null;
     state.shown = [];
     state.offset = 0;
+    // A new Challenge: drop the previous search's Bridges. Any request still in
+    // flight is harmless — its `settle` no longer finds its card in `shown`.
+    state.bridges.clear();
 
     parallelsRegion.setAttribute("aria-busy", "true");
     searchButton.disabled = true;
@@ -256,10 +323,20 @@ export function initApp({ document, loadCorpus, embed }) {
     enqueue(performShowMore);
   });
 
+  // One delegated listener: the Bridge control is rebuilt on every repaint, so
+  // binding per button would leak and miss buttons added by "Show 6 more".
+  parallelsRegion.addEventListener("click", (event) => {
+    const target = /** @type {Element | null} */ (event.target);
+    const button = target?.closest?.(".parallel__bridge-button") ?? null;
+    const url = button?.getAttribute("data-bridge-url");
+    if (url) requestBridge(url);
+  });
+
   syncSearchButton();
 
   return {
     corpusLoaded: pending.then(() => undefined),
     idle: () => pending,
+    bridgesSettled: () => Promise.all([...bridgesInFlight]),
   };
 }

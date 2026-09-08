@@ -47,6 +47,7 @@ test("every returned Parallel has the shape the UI renders", async () => {
     assert.match(p.url, /^https:\/\/en\.wikipedia\.org\/wiki\//);
     assert.equal(isField(p.field), true);
     assert.ok(p.leadSection.length > 0);
+    assert.ok(Array.isArray(p.headings));
     assert.equal(Number.isInteger(p.closeness), true);
     assert.ok(p.closeness >= 0 && p.closeness <= 100);
   }

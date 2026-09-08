@@ -25,6 +25,7 @@ import { mapWithConcurrency } from "./concurrency.mjs";
  * @property {string} field       One of the eleven Fields.
  * @property {string} url         Canonical English Wikipedia URL.
  * @property {string} leadText    The article's Lead Section (non-empty).
+ * @property {string[]} headings  The article's section headings, in page order.
  * @property {number[]} embedding 384-number Embedding of lead + headings.
  */
 
@@ -76,7 +77,7 @@ export async function runCorpusStage(articles, options = {}) {
   const records = [];
   for (const { article, leadText, headings } of withLead) {
     const embedding = await embed(`${leadText}\n${headings.join("\n")}`);
-    records.push({ title: article.title, field: article.field, url: article.url, leadText, embedding });
+    records.push({ title: article.title, field: article.field, url: article.url, leadText, headings, embedding });
     onEmbed?.(records.length, withLead.length);
   }
 

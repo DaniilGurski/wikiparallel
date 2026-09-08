@@ -380,6 +380,57 @@ textarea {
   --field-tint: #f2f0e6;
 }
 
+/* Bridge ------------------------------------------------------------------- */
+
+.parallel__bridge {
+  margin-top: 0.7rem;
+  font-family: var(--sans);
+  font-size: 0.9rem;
+}
+
+.parallel__bridge-button {
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--link);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+}
+
+.parallel__bridge-button:hover {
+  background: var(--paper-tint);
+}
+
+.parallel__bridge-pending,
+.parallel__bridge-weak {
+  margin: 0.3rem 0;
+  color: var(--ink-soft);
+}
+
+.parallel__bridge-summary {
+  margin: 0.2rem 0 0.5rem;
+  color: var(--ink);
+}
+
+.parallel__bridge-correspondences {
+  margin: 0 0 0.5rem;
+  padding-left: 1.1rem;
+}
+
+.parallel__bridge-correspondences li {
+  margin: 0.15rem 0;
+}
+
+.parallel__bridge-note {
+  margin: 0;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
 /* Show more --------------------------------------------------------------- */
 
 .show-more-wrap {

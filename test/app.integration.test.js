@@ -13,13 +13,46 @@ import { CHALLENGE, FIXTURE_CORPUS } from "./ranker.fixture.js";
 const html = await readFile(fileURLToPath(new URL("../index.html", import.meta.url)), "utf8");
 
 /**
+ * A canned Bridge, the default outcome of the fake generator.
+ * @type {import("../src/bridge.js").BridgeResult}
+ */
+const CANNED_BRIDGE = {
+  kind: "bridge",
+  summary: "Both keep a system serving demand it cannot fully meet.",
+  correspondences: [
+    { challenge: "your users", subject: "the body's cells" },
+    { challenge: "your servers", subject: "the regulatory organs" },
+  ],
+};
+
+/**
+ * A fake Bridge generator. `outcome` is a value to resolve with, an `Error` to
+ * reject with, or `"never"` to return a promise that never settles (for the
+ * pending state). Records every request it receives.
+ *
+ * @param {import("../src/bridge.js").BridgeResult | Error | "never"} [outcome]
+ */
+function fakeBridgeGenerator(outcome = CANNED_BRIDGE) {
+  /** @type {import("../src/bridge.js").BridgeRequest[]} */
+  const calls = [];
+  const impl = (/** @type {import("../src/bridge.js").BridgeRequest} */ request) => {
+    calls.push(request);
+    if (outcome === "never") return new Promise(() => {});
+    if (outcome instanceof Error) return Promise.reject(outcome);
+    return Promise.resolve(outcome);
+  };
+  return Object.assign(impl, { calls });
+}
+
+/**
  * Load index.html into jsdom and wire {@link initApp} against it with fakes for
- * the two seams that reach the network: the Corpus loader and the in-browser
- * embedder.
+ * the three seams that reach the network: the Corpus loader, the in-browser
+ * embedder, and the Bridge generator.
  *
  * @param {object} [opts]
  * @param {() => Promise<any[]>} [opts.loadCorpus]
  * @param {(text: string, options?: any) => Promise<number[]>} [opts.embed]
+ * @param {ReturnType<typeof fakeBridgeGenerator>} [opts.generateBridge]
  */
 async function bootApp(opts = {}) {
   const dom = new JSDOM(html, { url: "https://example.test/" });
@@ -39,14 +72,17 @@ async function bootApp(opts = {}) {
       return CHALLENGE;
     });
 
+  const generateBridge = opts.generateBridge ?? fakeBridgeGenerator();
+
   const app = initApp({
     document: window.document,
     loadCorpus: opts.loadCorpus ?? (async () => FIXTURE_CORPUS.map((a) => ({ ...a }))),
     embed,
+    generateBridge,
   });
   await app.corpusLoaded;
 
-  return { window, app, embedCalls };
+  return { window, app, embedCalls, generateBridge };
 }
 
 /** @type {import("jsdom").DOMWindow} */
@@ -107,7 +143,12 @@ test("before the Corpus loads, the dropdown shows the fallback Field list", () =
     DocumentFragment: dom.window.DocumentFragment,
   });
   // A Corpus load that never settles: the shell must still be usable.
-  initApp({ document: dom.window.document, loadCorpus: () => new Promise(() => {}), embed: async () => CHALLENGE });
+  initApp({
+    document: dom.window.document,
+    loadCorpus: () => new Promise(() => {}),
+    embed: async () => CHALLENGE,
+    generateBridge: fakeBridgeGenerator(),
+  });
   const options = [...dom.window.document.querySelectorAll("#home-field option")]
     .map((o) => /** @type {HTMLOptionElement} */ (o).value)
     .filter(Boolean);
@@ -156,11 +197,13 @@ test("a search renders a page of real Parallels grouped by Field, none in the Ho
   assert.ok((firstCard.querySelector(".parallel__lead")?.textContent ?? "").length > 0);
 });
 
-test("the Challenge reaches the in-browser embedder and nothing else", async () => {
-  // `fetch` is the only way text could leave the machine; the app must never
-  // touch it. Make any call throw.
+test("a search reaches the in-browser embedder and never calls fetch", async () => {
+  // A *search* is client-only (ADR-0001): the Challenge is embedded and ranked
+  // in the browser and nothing goes to the network. Bridges do call out
+  // (ADR-0004), so this is narrowed to "a search never calls fetch" — no Bridge
+  // is requested here — rather than "the app never calls fetch".
   const originalFetch = /** @type {any} */ (globalThis).fetch;
-  /** @type {any} */ (globalThis).fetch = () => assert.fail("the app must not call fetch");
+  /** @type {any} */ (globalThis).fetch = () => assert.fail("a search must not call fetch");
   try {
     await runSearch("handling a sudden surge of users", "Technology");
     assert.deepEqual(embedCalls, ["handling a sudden surge of users"]);
@@ -326,4 +369,159 @@ test("the search page links to the settings page", () => {
     hrefs.some((h) => /(^|\/)settings\.html$/.test(h ?? "")),
     "a link to settings.html",
   );
+});
+
+/* Bridge ------------------------------------------------------------------- */
+
+/** Click the "ask for a Bridge" control on the nth Parallel card (default first). */
+const clickBridge = (n = 0) => {
+  const card = window.document.querySelectorAll(".parallel")[n];
+  assert.ok(card, `no card ${n}`);
+  const button = card.querySelector(".parallel__bridge-button");
+  assert.ok(button, "no Bridge control on the card");
+  button.dispatchEvent(new window.Event("click", { bubbles: true }));
+};
+
+test("every Parallel card carries a control that asks for a Bridge", async () => {
+  await runSearch("handling a sudden surge of users", "Technology");
+  const cards = [...window.document.querySelectorAll(".parallel")];
+  assert.equal(cards.length, PAGE_SIZE);
+  for (const card of cards) {
+    assert.ok(card.querySelector(".parallel__bridge-button"), "each card has the control");
+  }
+});
+
+test("clicking the control shows a pending state until the Bridge arrives", async () => {
+  let release = () => {};
+  const slow = fakeBridgeGenerator("never");
+  // Swap in a generator we control: pending until we resolve it.
+  const controlled = Object.assign(
+    (/** @type {any} */ request) => {
+      slow.calls.push(request);
+      return new Promise((resolve) => {
+        release = () => resolve(CANNED_BRIDGE);
+      });
+    },
+    { calls: slow.calls },
+  );
+  ({ window, app } = await bootApp({ generateBridge: /** @type {any} */ (controlled) }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await tick();
+
+  const card = window.document.querySelector(".parallel");
+  assert.match(card?.textContent ?? "", /Building a Bridge/);
+  assert.equal(card?.querySelector(".parallel__bridge-button"), null, "the control is gone while pending");
+
+  release();
+  await app.bridgesSettled();
+  assert.doesNotMatch(window.document.querySelector(".parallel")?.textContent ?? "", /Building a Bridge/);
+});
+
+test("a Bridge renders its summary as a paragraph, its correspondences as a list, and the AI-generated line", async () => {
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+
+  const card = window.document.querySelector(".parallel");
+  assert.ok(card);
+  const summary = card.querySelector(".parallel__bridge-summary");
+  assert.equal(summary?.tagName, "P");
+  assert.match(summary?.textContent ?? "", /keep a system serving demand/);
+
+  const items = [...card.querySelectorAll(".parallel__bridge-correspondences li")];
+  assert.equal(items.length, 2);
+  assert.match(items[0]?.textContent ?? "", /your users ↔ the body's cells/);
+
+  const note = card.querySelector(".parallel__bridge-note");
+  assert.match(note?.textContent ?? "", /AI/);
+  assert.match(note?.textContent ?? "", /lead section/i);
+  assert.match(note?.textContent ?? "", /check it against the article/i);
+});
+
+test("a weak verdict renders a short 'no real parallel' message and no correspondences", async () => {
+  const weak = fakeBridgeGenerator({ kind: "weak", reason: "The two share only the word 'network'." });
+  ({ window, app } = await bootApp({ generateBridge: weak }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+
+  const card = window.document.querySelector(".parallel");
+  assert.match(card?.textContent ?? "", /No real parallel here/);
+  assert.equal(card?.querySelector(".parallel__bridge-correspondences"), null);
+  assert.equal(card?.querySelector(".parallel__bridge-note"), null, "no AI-generated line on a weak verdict");
+});
+
+test("the generator is asked for the clicked Parallel with the Challenge, and not the Home Field", async () => {
+  const gen = fakeBridgeGenerator();
+  ({ window, app } = await bootApp({ generateBridge: gen }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+
+  assert.equal(gen.calls.length, 1);
+  const [request] = gen.calls;
+  assert.deepEqual(Object.keys(request ?? {}).sort(), ["challenge", "parallel"]);
+  assert.equal(request?.challenge, "handling a sudden surge of users");
+  assert.ok(request?.parallel.title);
+  // The Home Field never reaches the generator: it is not on the request at all.
+  // (What the *prompt* carries is asserted in test/bridge.test.js.)
+});
+
+test("'Show 6 more' does not wipe an open Bridge", async () => {
+  await runSearch("keeping a system stable under load", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+  assert.match(window.document.querySelector(".parallel")?.textContent ?? "", /keep a system serving demand/);
+
+  const firstUrl = window.document.querySelector(".parallel__title a")?.getAttribute("href");
+  $("#show-more").dispatchEvent(new window.Event("click"));
+  await app.idle();
+
+  const stillThere = [...window.document.querySelectorAll(".parallel")].find(
+    (c) => c.querySelector(".parallel__title a")?.getAttribute("href") === firstUrl,
+  );
+  assert.match(stillThere?.textContent ?? "", /keep a system serving demand/, "the Bridge survived the repaint");
+});
+
+test("two cards can hold a Bridge at the same time", async () => {
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge(0);
+  clickBridge(1);
+  await app.bridgesSettled();
+
+  const cards = [...window.document.querySelectorAll(".parallel")];
+  assert.match(cards[0]?.textContent ?? "", /keep a system serving demand/);
+  assert.match(cards[1]?.textContent ?? "", /keep a system serving demand/);
+});
+
+test("a new search clears the Bridges from the previous one", async () => {
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+  assert.match(window.document.querySelector(".parallel")?.textContent ?? "", /keep a system serving demand/);
+
+  await runSearch("a completely different problem statement", "Mathematics");
+  for (const card of window.document.querySelectorAll(".parallel")) {
+    assert.doesNotMatch(card.textContent ?? "", /keep a system serving demand/);
+    assert.ok(card.querySelector(".parallel__bridge-button"), "the fresh cards are back to just the control");
+  }
+});
+
+test("search still works when every Bridge generation fails", async () => {
+  const failing = fakeBridgeGenerator(new Error("no key"));
+  ({ window, app } = await bootApp({ generateBridge: failing }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+
+  assert.match(window.document.querySelector(".parallel")?.textContent ?? "", /Couldn’t generate a Bridge/);
+  // The Parallels are untouched and a second search runs fine.
+  assert.equal(window.document.querySelectorAll(".parallel").length, PAGE_SIZE);
+  await runSearch("keeping a system stable under load", "Technology");
+  assert.equal(window.document.querySelectorAll(".parallel").length, PAGE_SIZE);
 });

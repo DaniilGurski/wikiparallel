@@ -31,6 +31,7 @@ const RECORD = {
   url: "https://en.wikipedia.org/wiki/Homeostasis",
   field: "Science",
   leadText: "Homeostasis is the state of steady internal conditions.",
+  headings: ["Overview", "History"],
   embedding: [0.1, 0.2, 0.3],
 };
 
@@ -45,6 +46,7 @@ test("loadCorpus fetches corpus.json and adapts leadText to leadSection", async 
       url: "https://en.wikipedia.org/wiki/Homeostasis",
       field: "Science",
       leadSection: "Homeostasis is the state of steady internal conditions.",
+      headings: ["Overview", "History"],
       embedding: [0.1, 0.2, 0.3],
     },
   ]);
@@ -79,6 +81,11 @@ test("a record missing its embedding becomes a CorpusMissingError, naming the in
     () => loadCorpus(fakeFetch({ body })),
     (error) => error instanceof CorpusMissingError && /record 1/.test(error.message),
   );
+});
+
+test("a record missing its headings becomes a CorpusMissingError", async () => {
+  const body = [{ ...RECORD, headings: undefined }];
+  await assert.rejects(() => loadCorpus(fakeFetch({ body })), CorpusMissingError);
 });
 
 test("a non-404 HTTP error is surfaced as a plain error, not a missing Corpus", async () => {

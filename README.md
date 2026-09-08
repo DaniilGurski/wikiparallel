@@ -97,3 +97,6 @@ npm run typecheck    # tsc --noEmit
   [Creative Commons Erkännande-DelaLika (CC BY-SA)](https://creativecommons.org/licenses/by-sa/4.0/).
   Appens sidfot bär denna upplysning och varje Parallel länkar till sin
   källartikel på Wikipedia för erkännande.
+- **Bridges** — en Bridge är text som genereras av en språkmodell utifrån
+  artikelns Lead Section och är inte Wikipedias egen text. Varje Bridge i appen
+  märks som AI-genererad och bör kontrolleras mot källartikeln.

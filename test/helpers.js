@@ -14,6 +14,7 @@ export const makeParallel = (p = {}) => ({
   url: p.url ?? "https://en.wikipedia.org/wiki/Untitled",
   field: p.field ?? "Science",
   leadSection: p.leadSection ?? "Lead.",
+  headings: p.headings ?? [],
   closeness: p.closeness ?? 50,
 });
 

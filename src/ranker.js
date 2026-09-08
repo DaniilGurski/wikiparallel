@@ -12,6 +12,7 @@ import { PAGE_SIZE } from "./grouping.js";
  * @property {string} url          Link to the article on English Wikipedia.
  * @property {Field} field         The Field the article sits in.
  * @property {string} leadSection  The article's Lead Section, shown as evidence.
+ * @property {string[]} headings   The article's section headings, in page order.
  * @property {number[]} embedding  The Lead Section Embedding.
  */
 
@@ -207,6 +208,7 @@ function toParallel({ article, similarity }) {
     url: article.url,
     field: article.field,
     leadSection: article.leadSection,
+    headings: article.headings,
     closeness: Math.round(similarity * 100),
   };
 }

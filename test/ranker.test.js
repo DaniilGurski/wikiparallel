@@ -197,6 +197,7 @@ test("each returned Parallel carries the fields the UI renders", () => {
     url: "https://en.wikipedia.org/wiki/Homeostasis",
     field: "Science",
     leadSection: "Lead Section of Homeostasis.",
+    headings: ["Overview", "History", "Feedback loops"],
     closeness: 95,
   });
 });
