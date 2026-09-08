@@ -1,85 +1,93 @@
 # WikiParallel
 
-WikiParallel is a browser-only tool for borrowing ideas across disciplines. You
-type a **Challenge** — a problem in plain language, such as "handling a sudden
-surge of users" — and mark its **Home Field**, the one of eleven Vital Articles
-top-level Fields the problem already belongs to. WikiParallel embeds the
-Challenge in your browser and compares it against the **Corpus** (about 1,000
-Wikipedia Vital Articles Level 3 pages, each reduced to its **Lead Section** and
-embedded once at build time). It returns **Parallels**: articles whose Lead
-Section is close to the Challenge in embedding space but that sit in a *different*
-Field, each shown with its **Closeness** (0–100) and a link to the source
-article. Excluding the Home Field is how the tool skips the obvious answers and
-surfaces the same underlying problem as seen by another discipline.
+WikiParallel är ett verktyg som körs enbart i webbläsaren och som hjälper dig att
+låna idéer mellan olika discipliner. Du skriver in en **Challenge** — ett problem
+formulerat i vardagligt språk, till exempel "hantera en plötslig anstormning av
+användare" — och markerar dess **Home Field**, det av elva toppnivåfält i
+Wikipedias Vital Articles-lista som problemet redan tillhör. WikiParallel
+beräknar en embedding av din Challenge i webbläsaren och jämför den mot
+**Corpus** (omkring 1 000 sidor från Wikipedias Vital Articles Level 3, där varje
+sida har reducerats till sin **Lead Section** och embeddats en gång vid
+bygget). Verktyget returnerar **Parallels**: artiklar vars Lead Section ligger
+nära din Challenge i embedding-rymden men som befinner sig i ett *annat* Field,
+var och en visad med sin **Closeness** (0–100) och en länk till källartikeln.
+Att utesluta Home Field är hur verktyget hoppar över de självklara svaren och
+lyfter fram samma underliggande problem sett genom en annan disciplin.
 
-There is no backend: `corpus.json` is fetched on load and the `gte-small`
-embedding model runs client-side via transformers.js, so the Challenge text
-never leaves the machine (see [`docs/adr/0001-browser-only-no-backend.md`](docs/adr/0001-browser-only-no-backend.md)).
+Det finns ingen backend: `corpus.json` hämtas vid sidladdning och
+embedding-modellen `gte-small` körs på klientsidan via transformers.js, så texten
+i din Challenge lämnar aldrig datorn (se
+[`docs/adr/0001-browser-only-no-backend.md`](docs/adr/0001-browser-only-no-backend.md)).
 
-## Requirements
+## Förutsättningar
 
-- Node.js 20 or newer (the build and the test runner use built-in `node --test`).
-- Network access on the first build (to fetch the article list and Lead Sections
-  from Wikipedia) and on the first search in the browser (to download the model).
+- Node.js 20 eller senare (bygget och testköraren använder inbyggda
+  `node --test`).
+- Nätverksåtkomst vid det första bygget (för att hämta artikellistan och Lead
+  Sections från Wikipedia) och vid den första sökningen i webbläsaren (för att
+  ladda ner modellen).
 
-## Setup
+## Installation
 
 ```sh
 npm install
 ```
 
-## Build the Corpus
+## Bygg din Corpus
 
 ```sh
-node build/build.mjs        # or: npm run build
+node build/build.mjs        # eller: npm run build
 ```
 
-This runs two stages behind one entry point:
+Detta kör två steg bakom en gemensam ingångspunkt:
 
-1. **List stage** — fetch Wikipedia's Vital Articles Level 3 list and derive the
-   `{ field, title, url }` list. The Field names and their order are read from
-   the live list here.
-2. **Corpus stage** — fetch each article's Lead Section and section headings and
-   embed the Lead Section with `gte-small`.
+1. **List-steget** — hämtar Wikipedias Vital Articles Level 3-lista och härleder
+   listan med `{ field, title, url }`. Namnen på alla Field och deras ordning
+   läses från den aktuella listan här.
+2. **Corpus-steget** — hämtar varje artikels Lead Section och rubriker och
+   beräknar en embedding av Lead Section med `gte-small`.
 
-The result is written to `corpus.json` at the repo root (about 10 MB, ~1,000
-records). Wikipedia responses are cached under `build/cache/`, so a second run
-needs no network and produces an equivalent file.
+Resultatet skrivs till `corpus.json` i projektroten (omkring 10 MB, ~1 000
+poster). Svaren från Wikipedia cachas under `build/cache/`, så en andra körning
+behöver inget nätverk och producerar en likvärdig fil.
 
-`corpus.json` is **generated, not committed** — it is listed in `.gitignore`. A
-fresh clone has no Corpus until you run the build, and the app shows a "run the
-build" message until it exists.
+`corpus.json` **genereras och versionshanteras inte** — den står i `.gitignore`.
+En färsk klon har ingen Corpus förrän du kör bygget, och appen visar ett
+meddelande om att köra bygget tills filen finns.
 
-Related build commands:
+Relaterade byggkommandon:
 
-- `npm run build:list` — run only the list stage, printing the article list.
-- `node build/eval.mjs` — rank eight hand-written Challenges against the built
-  Corpus and print the Parallels; see [`docs/evaluation.md`](docs/evaluation.md).
+- `npm run build:list` — kör enbart list-steget och skriver ut artikellistan.
+- `node build/eval.mjs` — rangordnar åtta handskrivna Challenges mot den byggda
+  Corpus och skriver ut deras Parallels; se [`docs/evaluation.md`](docs/evaluation.md).
 
-## Run the app
+## Kör appen
 
-WikiParallel is a static site — serve the repo root with any static file server:
+WikiParallel är en statisk webbplats — servera projektroten med valfri statisk
+filserver:
 
 ```sh
 npm run serve        # python3 -m http.server 8000
 ```
 
-Then open <http://localhost:8000>. Enter a Challenge, pick a Home Field, and
-choose **Find Parallels**. The first search downloads the `gte-small` model
-(~34 MB) from the jsDelivr CDN; the browser caches it for every visit after.
+Öppna sedan <http://localhost:8000>. Skriv in en Challenge, välj ett Home Field
+och välj **Find Parallels**. Den första sökningen laddar ner modellen `gte-small`
+(~34 MB) från jsDelivr-CDN:et; webbläsaren cachar den till alla efterföljande
+besök.
 
-## Tests and type-checking
+## Tester och typkontroll
 
 ```sh
 npm test             # node --test
 npm run typecheck    # tsc --noEmit
 ```
 
-## Licensing
+## Licensiering
 
-- **Code** — MIT. See [`LICENSE`](LICENSE).
-- **Wikipedia article text** — the Lead Sections stored in `corpus.json` and
-  shown in the app as evidence for each Parallel come from Wikipedia and are used
-  under [Creative Commons Attribution-ShareAlike (CC BY-SA)](https://creativecommons.org/licenses/by-sa/4.0/).
-  The app footer carries this notice and every Parallel links to its source
-  Wikipedia article for attribution.
+- **Kod** — MIT. Se [`LICENSE`](LICENSE).
+- **Artikeltext från Wikipedia** — de Lead Sections som lagras i `corpus.json`
+  och visas i appen som underlag för varje Parallel kommer från Wikipedia och
+  används under
+  [Creative Commons Erkännande-DelaLika (CC BY-SA)](https://creativecommons.org/licenses/by-sa/4.0/).
+  Appens sidfot bär denna upplysning och varje Parallel länkar till sin
+  källartikel på Wikipedia för erkännande.
