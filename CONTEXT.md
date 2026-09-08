@@ -52,6 +52,16 @@ whole number from 0 to 100 (cosine similarity of the two Embeddings, times 100).
 A rough ordering cue, not a probability or a quality score.
 _Avoid_: score, relevance, confidence, distance
 
+**Bridge**:
+A short account of the shared structure between a Challenge and one Parallel: a
+sentence naming the underlying problem both describe, plus two or three
+correspondences pairing an element of the Challenge with an element of the
+article's subject. A Bridge is asked for one Parallel at a time and never exists
+before the person asks. It is a quick check on whether an article is worth
+reading, not an answer — it may be approximate, and when there is no real shared
+structure no Bridge is produced and the person is told so instead.
+_Avoid_: explanation, reason, insight, analogy (reserved — see Parallel)
+
 **Embedding**:
 The fixed-length vector produced from a piece of text by the one small model the
 tool uses. The same model embeds Lead Sections at build time and Challenges in
