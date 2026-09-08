@@ -13,8 +13,14 @@ import { FIELDS, fieldSlug } from "./fields.js";
  * will not parse — renders the same message, so there is nothing per-case to
  * hold (issue #15).
  *
+ * A ready Bridge can be collapsed out of the way. `collapsed` is held in state
+ * rather than in the DOM for the same reason the Bridge itself is: a repaint
+ * rebuilds the card from scratch, and a Bridge folded away must stay folded away
+ * (issue #16). It is set on arrival rather than left optional, so there is only
+ * one way to say "open".
+ *
  * @typedef {{ status: "pending" }
- *   | { status: "ready", result: BridgeResult }
+ *   | { status: "ready", result: BridgeResult, collapsed: boolean }
  *   | { status: "error" }} BridgeCardState
  */
 
@@ -42,6 +48,15 @@ const BRIDGE_FAILURE_MESSAGE =
 
 /** The label on the control that asks for the same Bridge again. */
 const BRIDGE_RETRY_LABEL = "Try again";
+
+/**
+ * The labels on the control that folds a Bridge away and brings it back. It is
+ * deliberately a different control from {@link BRIDGE_BUTTON_LABEL}: the two sit
+ * in the same place on the card and only one of them spends money, so they must
+ * not be one button whose meaning depends on state (issue #16).
+ */
+const BRIDGE_HIDE_LABEL = "Hide Bridge";
+const BRIDGE_SHOW_LABEL = "Show Bridge";
 
 /**
  * The line under every Bridge marking it as generated text, not Wikipedia's —
@@ -110,6 +125,27 @@ function para(className, text, status = false) {
 }
 
 /**
+ * A control in the Bridge area. Every one carries the Parallel's URL, which is
+ * how the app's single delegated click handler knows which card was clicked.
+ * The class is what says which of the two things a click means — ask for a
+ * Bridge, which spends a request, or fold one away, which does not — so the two
+ * never share it.
+ *
+ * @param {Parallel} parallel
+ * @param {string} className
+ * @param {string} label
+ * @returns {HTMLButtonElement}
+ */
+function bridgeControl(parallel, className, label) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.dataset.bridgeUrl = parallel.url;
+  button.textContent = label;
+  return button;
+}
+
+/**
  * The control that asks for a Bridge for `parallel`. The retry after a failure
  * is the same control under another label, so one delegated click handler in
  * the app serves both and a retry is simply the request made again.
@@ -119,11 +155,27 @@ function para(className, text, status = false) {
  * @returns {HTMLButtonElement}
  */
 function bridgeButton(parallel, label) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "parallel__bridge-button";
-  button.dataset.bridgeUrl = parallel.url;
-  button.textContent = label;
+  return bridgeControl(parallel, "parallel__bridge-button", label);
+}
+
+/**
+ * The control that folds a rendered Bridge away, or brings it back. It sits at
+ * the top of the Bridge area in both states so it does not move under the
+ * pointer when clicked. It takes the card's own `collapsed` flag rather than a
+ * label and a separate expanded bit, so the label and the ARIA state cannot
+ * disagree.
+ *
+ * @param {Parallel} parallel
+ * @param {boolean} collapsed
+ * @returns {HTMLButtonElement}
+ */
+function bridgeToggle(parallel, collapsed) {
+  const button = bridgeControl(
+    parallel,
+    "parallel__bridge-toggle",
+    collapsed ? BRIDGE_SHOW_LABEL : BRIDGE_HIDE_LABEL,
+  );
+  button.setAttribute("aria-expanded", String(!collapsed));
   return button;
 }
 
@@ -131,8 +183,10 @@ function bridgeButton(parallel, label) {
  * The Bridge area of a card: the "ask for a Bridge" control, or — once asked —
  * the pending state, the Bridge, or the one failure message with a control to
  * ask again. A Bridge the model judged `loose` renders in full like any other,
- * with a marker above it saying so. Rendered purely from `state`, so a repaint
- * restores whatever the card had.
+ * with a marker above it saying so. A rendered Bridge carries a control that
+ * folds it away and brings it back, which never reaches the generator. Rendered
+ * purely from `state`, so a repaint restores whatever the card had — open,
+ * collapsed, pending or failed.
  *
  * @param {Parallel} parallel
  * @param {BridgeCardState} [state]
@@ -161,6 +215,9 @@ export function bridgeSection(parallel, state) {
   }
 
   const { result } = state;
+
+  wrap.append(bridgeToggle(parallel, state.collapsed));
+  if (state.collapsed) return wrap;
 
   if (result.strength === "loose") {
     wrap.append(

@@ -167,7 +167,7 @@ export function initApp({ document, loadCorpus, embed, generateBridge }) {
     const pending = Promise.resolve()
       .then(() => generateBridge({ challenge: state.challenge, parallel }))
       .then(
-        (result) => settle({ status: "ready", result }),
+        (result) => settle({ status: "ready", result, collapsed: false }),
         // Every failure is the same failure to the person (issue #15): the card
         // shows one message with a retry, so the reason never reaches the DOM
         // and the app never has to ask whether a key is stored.
@@ -176,6 +176,19 @@ export function initApp({ document, loadCorpus, embed, generateBridge }) {
       .finally(() => bridgesInFlight.delete(pending));
 
     bridgesInFlight.add(pending);
+  }
+
+  /**
+   * Fold the Bridge on the card for `url` away, or bring it back. The Bridge
+   * stays in state, so re-expanding costs neither a wait nor a paid request
+   * (issue #16) — this function deliberately cannot reach the generator.
+   * @param {string} url
+   */
+  function toggleBridge(url) {
+    const bridge = state.bridges.get(url);
+    if (bridge?.status !== "ready") return;
+    state.bridges.set(url, { ...bridge, collapsed: !bridge.collapsed });
+    paint();
   }
 
   /** @param {string} message */
@@ -321,13 +334,30 @@ export function initApp({ document, loadCorpus, embed, generateBridge }) {
     enqueue(performShowMore);
   });
 
-  // One delegated listener: the Bridge control is rebuilt on every repaint, so
-  // binding per button would leak and miss buttons added by "Show 6 more".
+  /**
+   * The Parallel URL on the Bridge control of class `selector` the click landed
+   * in, or `null` if it landed elsewhere.
+   * @param {Element | null} target
+   * @param {string} selector
+   */
+  const bridgeUrlAt = (target, selector) =>
+    target?.closest?.(selector)?.getAttribute("data-bridge-url") ?? null;
+
+  // One delegated listener: the Bridge controls are rebuilt on every repaint, so
+  // binding per button would leak and miss buttons added by "Show 6 more". The
+  // two controls are matched separately — folding a Bridge away must never fall
+  // through to the path that asks for a new one, which would spend a request.
   parallelsRegion.addEventListener("click", (event) => {
     const target = /** @type {Element | null} */ (event.target);
-    const button = target?.closest?.(".parallel__bridge-button") ?? null;
-    const url = button?.getAttribute("data-bridge-url");
-    if (url) requestBridge(url);
+
+    const toggleUrl = bridgeUrlAt(target, ".parallel__bridge-toggle");
+    if (toggleUrl) {
+      toggleBridge(toggleUrl);
+      return;
+    }
+
+    const askUrl = bridgeUrlAt(target, ".parallel__bridge-button");
+    if (askUrl) requestBridge(askUrl);
   });
 
   syncSearchButton();

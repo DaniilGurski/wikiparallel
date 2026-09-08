@@ -404,6 +404,26 @@ textarea {
   background: var(--paper-tint);
 }
 
+/* The collapse control is quieter than the one that spends a request: it sits
+   above a Bridge already on the card, so it reads as a disclosure, not an
+   action. */
+.parallel__bridge-toggle {
+  display: block;
+  margin-bottom: 0.4rem;
+  padding: 0;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.parallel__bridge-toggle:hover {
+  color: var(--link);
+}
+
 .parallel__bridge-pending,
 .parallel__bridge-strength {
   margin: 0.3rem 0;

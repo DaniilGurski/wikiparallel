@@ -53,6 +53,36 @@ function fakeBridgeGenerator(outcome = CANNED_BRIDGE) {
 }
 
 /**
+ * A Bridge generator whose calls are settled by hand. Needed wherever a test has
+ * to hold a generation open — two Bridges in flight at once, or a search started
+ * while one is still running — which the sequence-driven
+ * {@link fakeBridgeGenerator} cannot express.
+ */
+function controlledBridgeGenerator() {
+  /** @type {import("../src/bridge.js").BridgeRequest[]} */
+  const calls = [];
+  /** @type {((result: any) => void)[]} */
+  const open = [];
+  const impl = (/** @type {import("../src/bridge.js").BridgeRequest} */ request) => {
+    calls.push(request);
+    return new Promise((resolve) => open.push(resolve));
+  };
+  return Object.assign(impl, {
+    calls,
+    /**
+     * Settle the nth call — in the order the clicks were made — with a Bridge.
+     * @param {number} n
+     * @param {import("../src/bridge.js").BridgeResult} result
+     */
+    settle(n, result) {
+      const resolve = open[n];
+      assert.ok(resolve, `call ${n} was never made`);
+      resolve(result);
+    },
+  });
+}
+
+/**
  * Load index.html into jsdom and wire {@link initApp} against it with fakes for
  * the three seams that reach the network: the Corpus loader, the in-browser
  * embedder, and the Bridge generator.
@@ -694,4 +724,138 @@ test("with no key stored, search, 'Show 6 more' and Lead Sections all behave nor
   // And a fresh search still works.
   await runSearch("a completely different problem statement", "Mathematics");
   assert.equal(window.document.querySelectorAll(".parallel").length, PAGE_SIZE);
+});
+
+/* Bridge lifecycle and concurrency (issue #16) ----------------------------- */
+
+/** Click the collapse/expand control on the nth Parallel card (default first). */
+const clickBridgeToggle = (n = 0) => {
+  const button = cardAt(n).querySelector(".parallel__bridge-toggle");
+  assert.ok(button, "no collapse control on the card");
+  button.dispatchEvent(new window.Event("click", { bubbles: true }));
+};
+
+test("collapsing a Bridge and opening it again never asks the generator twice", async () => {
+  const gen = fakeBridgeGenerator();
+  ({ window, app } = await bootApp({ generateBridge: gen }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+  assert.equal(gen.calls.length, 1);
+  assert.match(bridgeArea().textContent ?? "", /keep a system serving demand/);
+
+  clickBridgeToggle();
+  assert.equal(
+    bridgeArea().querySelector(".parallel__bridge-summary"),
+    null,
+    "collapsed: the Bridge is off the card",
+  );
+
+  clickBridgeToggle();
+  await app.bridgesSettled();
+  assert.match(bridgeArea().textContent ?? "", /keep a system serving demand/);
+  assert.equal(
+    bridgeArea().querySelectorAll(".parallel__bridge-correspondences li").length,
+    2,
+    "the whole Bridge came back, not a fragment",
+  );
+  assert.equal(gen.calls.length, 1, "re-expanding costs neither a wait nor a paid request");
+});
+
+test("a collapsed Bridge stays collapsed through a 'Show 6 more' repaint", async () => {
+  await runSearch("keeping a system stable under load", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+  clickBridgeToggle();
+
+  const url = cardAt().querySelector(".parallel__title a")?.getAttribute("href");
+  $("#show-more").dispatchEvent(new window.Event("click"));
+  await app.idle();
+
+  const card = [...window.document.querySelectorAll(".parallel")].find(
+    (c) => c.querySelector(".parallel__title a")?.getAttribute("href") === url,
+  );
+  assert.ok(card, "the card is still on the page");
+  assert.equal(card.querySelector(".parallel__bridge-summary"), null, "still collapsed");
+  assert.ok(card.querySelector(".parallel__bridge-toggle"), "and can still be opened again");
+});
+
+test("two Bridges generate at the same time, each landing in its own card", async () => {
+  const gen = controlledBridgeGenerator();
+  ({ window, app } = await bootApp({ generateBridge: gen }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge(0);
+  clickBridge(1);
+  await tick();
+
+  assert.equal(gen.calls.length, 2, "both cards asked, neither waiting on the other");
+  assert.match(bridgeArea(0).textContent ?? "", /Building a Bridge/);
+  assert.match(bridgeArea(1).textContent ?? "", /Building a Bridge/);
+
+  // Settle out of order: each Bridge belongs to its own card, not to the queue.
+  gen.settle(1, { ...CANNED_BRIDGE, summary: "The second card's Bridge." });
+  gen.settle(0, { ...CANNED_BRIDGE, summary: "The first card's Bridge." });
+  await app.bridgesSettled();
+
+  assert.match(bridgeArea(0).textContent ?? "", /The first card's Bridge/);
+  assert.doesNotMatch(bridgeArea(0).textContent ?? "", /The second card's Bridge/);
+  assert.match(bridgeArea(1).textContent ?? "", /The second card's Bridge/);
+});
+
+test("a new search runs while a Bridge is still generating, and is not delayed by it", async () => {
+  const gen = controlledBridgeGenerator();
+  ({ window, app } = await bootApp({ generateBridge: gen }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await tick();
+  assert.match(bridgeArea().textContent ?? "", /Building a Bridge/);
+
+  // The generation is never settled. If Bridges shared the search chain this
+  // would hang instead of rendering the new Parallels.
+  await runSearch("a completely different problem statement", "Mathematics");
+
+  assert.equal(window.document.querySelectorAll(".parallel").length, PAGE_SIZE);
+  assert.equal(gen.calls.length, 1, "the abandoned generation was not retried");
+  for (const card of window.document.querySelectorAll(".parallel")) {
+    assert.doesNotMatch(card.textContent ?? "", /Building a Bridge/);
+  }
+});
+
+test("a Bridge that arrives after a new search never renders into the new set", async () => {
+  const gen = controlledBridgeGenerator();
+  ({ window, app } = await bootApp({ generateBridge: gen }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await tick();
+
+  await runSearch("a completely different problem statement", "Mathematics");
+  // The orphan lands after its card is gone.
+  gen.settle(0, { ...CANNED_BRIDGE, summary: "A Bridge for the Challenge you replaced." });
+  await app.bridgesSettled();
+
+  for (const card of window.document.querySelectorAll(".parallel")) {
+    assert.doesNotMatch(card.textContent ?? "", /Challenge you replaced/);
+    assert.ok(card.querySelector(".parallel__bridge-button"), "every fresh card is back to the ask control");
+  }
+});
+
+test("a Bridge is never written to browser storage", async () => {
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+  assert.match(bridgeArea().textContent ?? "", /keep a system serving demand/);
+
+  // The claim is about Bridges, not about the app storing nothing at all — the
+  // settings page legitimately stores a key. So look for the Bridge's own words
+  // in everything either store holds.
+  const stored = [window.localStorage, window.sessionStorage].flatMap((store) =>
+    Array.from({ length: store.length }, (_, i) => store.getItem(store.key(i) ?? "") ?? ""),
+  );
+  for (const value of stored) {
+    assert.doesNotMatch(value, /keep a system serving demand/, "no Bridge text reaches storage");
+  }
 });
