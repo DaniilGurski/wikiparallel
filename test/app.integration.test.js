@@ -26,20 +26,28 @@ const CANNED_BRIDGE = {
 };
 
 /**
+ * @typedef {import("../src/bridge.js").BridgeResult | Error | "never"} BridgeOutcome
+ */
+
+/**
  * A fake Bridge generator. `outcome` is a value to resolve with, an `Error` to
  * reject with, or `"never"` to return a promise that never settles (for the
- * pending state). Records every request it receives.
+ * pending state). An array is a sequence, one entry per call, with the last
+ * entry repeating once the sequence runs out — that is how a retry after a
+ * failure is driven. Records every request it receives.
  *
- * @param {import("../src/bridge.js").BridgeResult | Error | "never"} [outcome]
+ * @param {BridgeOutcome | BridgeOutcome[]} [outcome]
  */
 function fakeBridgeGenerator(outcome = CANNED_BRIDGE) {
   /** @type {import("../src/bridge.js").BridgeRequest[]} */
   const calls = [];
+  const sequence = Array.isArray(outcome) ? outcome : [outcome];
   const impl = (/** @type {import("../src/bridge.js").BridgeRequest} */ request) => {
     calls.push(request);
-    if (outcome === "never") return new Promise(() => {});
-    if (outcome instanceof Error) return Promise.reject(outcome);
-    return Promise.resolve(outcome);
+    const next = sequence[Math.min(calls.length - 1, sequence.length - 1)];
+    if (next === "never") return new Promise(() => {});
+    if (next instanceof Error) return Promise.reject(next);
+    return Promise.resolve(next);
   };
   return Object.assign(impl, { calls });
 }
@@ -373,11 +381,16 @@ test("the search page links to the settings page", () => {
 
 /* Bridge ------------------------------------------------------------------- */
 
-/** Click the "ask for a Bridge" control on the nth Parallel card (default first). */
-const clickBridge = (n = 0) => {
+/** The nth Parallel card on the page (default first). */
+const cardAt = (n = 0) => {
   const card = window.document.querySelectorAll(".parallel")[n];
   assert.ok(card, `no card ${n}`);
-  const button = card.querySelector(".parallel__bridge-button");
+  return card;
+};
+
+/** Click the "ask for a Bridge" control on the nth Parallel card (default first). */
+const clickBridge = (n = 0) => {
+  const button = cardAt(n).querySelector(".parallel__bridge-button");
   assert.ok(button, "no Bridge control on the card");
   button.dispatchEvent(new window.Event("click", { bubbles: true }));
 };
@@ -529,17 +542,156 @@ test("a new search clears the Bridges from the previous one", async () => {
   }
 });
 
-test("search still works when every Bridge generation fails", async () => {
-  const failing = fakeBridgeGenerator(new Error("no key"));
+/* Bridge failures (issue #15) ---------------------------------------------- */
+
+/** The Bridge area of the nth Parallel card (default first). */
+const bridgeArea = (n = 0) => {
+  const area = cardAt(n).querySelector(".parallel__bridge");
+  assert.ok(area, `no Bridge area on card ${n}`);
+  return area;
+};
+
+test("a failed Bridge shows one message with a retry control, and keeps the Parallels", async () => {
+  const failing = fakeBridgeGenerator(new Error("401 invalid x-api-key"));
   ({ window, app } = await bootApp({ generateBridge: failing }));
 
   await runSearch("handling a sudden surge of users", "Technology");
   clickBridge();
   await app.bridgesSettled();
 
-  assert.match(window.document.querySelector(".parallel")?.textContent ?? "", /Couldn’t generate a Bridge/);
+  const area = bridgeArea();
+  const message = area.querySelector(".parallel__bridge-error");
+  assert.ok(message, "the failure renders one message");
+  assert.match(message.textContent ?? "", /Bridge/);
+  assert.ok(area.querySelector(".parallel__bridge-button"), "the message offers a retry control");
+  assert.equal(area.querySelector(".parallel__bridge-summary"), null, "no half-rendered Bridge");
+
   // The Parallels are untouched and a second search runs fine.
   assert.equal(window.document.querySelectorAll(".parallel").length, PAGE_SIZE);
   await runSearch("keeping a system stable under load", "Technology");
+  assert.equal(window.document.querySelectorAll(".parallel").length, PAGE_SIZE);
+});
+
+test("every failure renders the same message, whatever went wrong", async () => {
+  // Two unrelated failures — a missing key and an unparseable reply — on two
+  // cards. The person sees one message, not a per-case variant.
+  const failing = fakeBridgeGenerator([
+    new Error("No Anthropic API key is stored [marker-no-key]."),
+    new Error("The model’s response was not valid JSON [marker-parse]."),
+  ]);
+  ({ window, app } = await bootApp({ generateBridge: failing }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge(0);
+  clickBridge(1);
+  await app.bridgesSettled();
+
+  const first = bridgeArea(0).querySelector(".parallel__bridge-error")?.textContent;
+  const second = bridgeArea(1).querySelector(".parallel__bridge-error")?.textContent;
+  assert.ok(first);
+  assert.equal(first, second);
+  // Neither error's own words leak into the card.
+  assert.doesNotMatch(first ?? "", /marker-/);
+});
+
+test("the failure message names the settings page as text, not as a link", async () => {
+  ({ window, app } = await bootApp({ generateBridge: fakeBridgeGenerator(new Error("boom")) }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+
+  const area = bridgeArea();
+  assert.match(area.textContent ?? "", /settings page/i);
+  assert.equal(area.querySelector("a"), null, "the Bridge area holds no link");
+});
+
+test("retrying after a failure asks again and renders the Bridge that comes back", async () => {
+  const flaky = fakeBridgeGenerator([new Error("rate limited"), CANNED_BRIDGE]);
+  ({ window, app } = await bootApp({ generateBridge: flaky }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+  assert.equal(flaky.calls.length, 1);
+
+  clickBridge(); // the retry control sits where the "ask" control was
+  await app.bridgesSettled();
+
+  assert.equal(flaky.calls.length, 2, "the retry asks the generator again");
+  const area = bridgeArea();
+  assert.equal(area.querySelector(".parallel__bridge-error"), null, "the message is gone");
+  assert.match(area.textContent ?? "", /keep a system serving demand/);
+  assert.equal(area.querySelectorAll(".parallel__bridge-correspondences li").length, 2);
+});
+
+test("a retry that comes back loose renders the loose Bridge, not the message", async () => {
+  // The retry renders whatever the second attempt returns, and a loose Bridge is
+  // an outcome like any other (ADR-0005) — not a second kind of failure.
+  const flaky = fakeBridgeGenerator([
+    new Error("network down"),
+    {
+      strength: "loose",
+      summary: "Only the vocabulary of 'networks' really carries over.",
+      correspondences: [{ challenge: "your servers", subject: "the nerve cells" }],
+    },
+  ]);
+  ({ window, app } = await bootApp({ generateBridge: flaky }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+  clickBridge();
+  await app.bridgesSettled();
+
+  const area = bridgeArea();
+  assert.equal(area.querySelector(".parallel__bridge-error"), null);
+  assert.ok(area.querySelector(".parallel__bridge-strength--loose"), "marked loose");
+  assert.match(area.textContent ?? "", /Only the vocabulary/);
+  assert.equal(area.querySelectorAll(".parallel__bridge-correspondences li").length, 1);
+});
+
+test("a retry that fails again shows the same message and can be retried once more", async () => {
+  const failing = fakeBridgeGenerator(new Error("still down"));
+  ({ window, app } = await bootApp({ generateBridge: failing }));
+
+  await runSearch("handling a sudden surge of users", "Technology");
+  clickBridge();
+  await app.bridgesSettled();
+  const first = bridgeArea().querySelector(".parallel__bridge-error")?.textContent;
+
+  clickBridge();
+  await app.bridgesSettled();
+
+  assert.equal(failing.calls.length, 2);
+  const area = bridgeArea();
+  assert.equal(area.querySelector(".parallel__bridge-error")?.textContent, first);
+  assert.ok(area.querySelector(".parallel__bridge-button"), "the retry control is still offered");
+});
+
+test("with no key stored, search, 'Show 6 more' and Lead Sections all behave normally", async () => {
+  // A browser with no key: every generation rejects, exactly as main.js arranges.
+  const noKey = fakeBridgeGenerator(new Error("No Anthropic API key is stored."));
+  ({ window, app } = await bootApp({ generateBridge: noKey }));
+
+  await runSearch("keeping a system stable under load", "Technology");
+  assert.equal(window.document.querySelectorAll(".parallel").length, PAGE_SIZE);
+  for (const lead of window.document.querySelectorAll(".parallel__lead")) {
+    assert.ok((lead.textContent ?? "").length > 0, "every card still shows its Lead Section");
+  }
+
+  clickBridge();
+  await app.bridgesSettled();
+
+  $("#show-more").dispatchEvent(new window.Event("click"));
+  await app.idle();
+  assert.equal(window.document.querySelectorAll(".parallel").length, PAGE_SIZE * 2);
+  assert.ok(
+    bridgeArea().querySelector(".parallel__bridge-error"),
+    "the failed card survives the repaint as a failed card",
+  );
+
+  // And a fresh search still works.
+  await runSearch("a completely different problem statement", "Mathematics");
   assert.equal(window.document.querySelectorAll(".parallel").length, PAGE_SIZE);
 });

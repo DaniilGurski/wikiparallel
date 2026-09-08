@@ -11,9 +11,12 @@ import { readApiKey } from "./settings.js";
  * in `app.js` and its seams.
  *
  * The Bridge generator reads the stored key fresh on every request, so a key
- * added or changed on the settings page takes effect without a reload. The app
- * never sees the key — a missing one surfaces as a failed Bridge, exactly like
- * any other failure (issue #15).
+ * added or changed on the settings page takes effect without a reload — and a
+ * key added after a failed Bridge makes the card's retry succeed. The app never
+ * sees the key: a missing one is thrown here and surfaces as a failed Bridge,
+ * indistinguishable from any other failure, which is why the card's one message
+ * names the settings page (issue #15). Nothing reads the thrown message — the
+ * card writes its own — so it exists only to name the cause in a debugger.
  */
 const embedder = createEmbedder();
 

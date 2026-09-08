@@ -410,6 +410,13 @@ textarea {
   color: var(--ink-soft);
 }
 
+/* The failure sits above its retry control, so it carries a wider bottom gap
+   than the other one-line states. */
+.parallel__bridge-error {
+  margin: 0.3rem 0 0.5rem;
+  color: var(--ink-soft);
+}
+
 .parallel__bridge-strength--loose {
   font-style: italic;
 }

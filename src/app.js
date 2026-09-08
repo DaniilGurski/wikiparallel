@@ -146,7 +146,8 @@ export function initApp({ document, loadCorpus, embed, generateBridge }) {
   /**
    * Ask for a Bridge for the Parallel with `url`. Runs off the search chain
    * (issue #12): it only writes into its own card, so a new search must not
-   * queue behind it.
+   * queue behind it. Also the retry path — retrying is this same request made
+   * again, and whatever comes back the second time is what the card renders.
    * @param {string} url
    */
   function requestBridge(url) {
@@ -167,13 +168,10 @@ export function initApp({ document, loadCorpus, embed, generateBridge }) {
       .then(() => generateBridge({ challenge: state.challenge, parallel }))
       .then(
         (result) => settle({ status: "ready", result }),
-        (error) =>
-          settle({
-            status: "error",
-            message: `Couldn’t generate a Bridge: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          }),
+        // Every failure is the same failure to the person (issue #15): the card
+        // shows one message with a retry, so the reason never reaches the DOM
+        // and the app never has to ask whether a key is stored.
+        () => settle({ status: "error" }),
       )
       .finally(() => bridgesInFlight.delete(pending));
 

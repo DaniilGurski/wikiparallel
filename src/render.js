@@ -8,9 +8,14 @@ import { FIELDS, fieldSlug } from "./fields.js";
  * The state of one card's Bridge, held in app state so a repaint (a new page of
  * Parallels, another card's Bridge arriving) never wipes it.
  *
+ * The failure state carries nothing: every way a Bridge can fail — no key
+ * stored, a key the API rejects, a rate limit, a network error, a reply that
+ * will not parse — renders the same message, so there is nothing per-case to
+ * hold (issue #15).
+ *
  * @typedef {{ status: "pending" }
  *   | { status: "ready", result: BridgeResult }
- *   | { status: "error", message: string }} BridgeCardState
+ *   | { status: "error" }} BridgeCardState
  */
 
 /** The label on the control that asks for a Bridge. */
@@ -18,6 +23,25 @@ const BRIDGE_BUTTON_LABEL = "Build a Bridge";
 
 /** Shown while the model is working. */
 const BRIDGE_PENDING_LABEL = "Building a Bridge…";
+
+/**
+ * The one message shown when a Bridge cannot be generated. Deliberately the
+ * same for every cause — no key stored, a key the API rejects, a rate limit, a
+ * network error, a reply that will not parse — because a person can act on
+ * exactly two things: their key, or trying again. The card offers both, and the
+ * app never has to know whether a key exists (issue #15).
+ *
+ * It points at the key without claiming which cause fired: the app cannot tell
+ * a missing key from a rejected one, and telling someone with a bad key to just
+ * wait would send them away from the one thing they can fix. The settings page
+ * is named in the text rather than linked, so the message stays a sentence and
+ * not a navigation control sitting inside a card.
+ */
+const BRIDGE_FAILURE_MESSAGE =
+  "Couldn’t generate a Bridge. Check the Anthropic API key on the settings page, then try again.";
+
+/** The label on the control that asks for the same Bridge again. */
+const BRIDGE_RETRY_LABEL = "Try again";
 
 /**
  * The line under every Bridge marking it as generated text, not Wikipedia's —
@@ -86,10 +110,29 @@ function para(className, text, status = false) {
 }
 
 /**
+ * The control that asks for a Bridge for `parallel`. The retry after a failure
+ * is the same control under another label, so one delegated click handler in
+ * the app serves both and a retry is simply the request made again.
+ *
+ * @param {Parallel} parallel
+ * @param {string} label
+ * @returns {HTMLButtonElement}
+ */
+function bridgeButton(parallel, label) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "parallel__bridge-button";
+  button.dataset.bridgeUrl = parallel.url;
+  button.textContent = label;
+  return button;
+}
+
+/**
  * The Bridge area of a card: the "ask for a Bridge" control, or — once asked —
- * the pending state, the Bridge, or a one-line failure. A Bridge the model
- * judged `loose` renders in full like any other, with a marker above it saying
- * so. Rendered purely from `state`, so a repaint restores whatever the card had.
+ * the pending state, the Bridge, or the one failure message with a control to
+ * ask again. A Bridge the model judged `loose` renders in full like any other,
+ * with a marker above it saying so. Rendered purely from `state`, so a repaint
+ * restores whatever the card had.
  *
  * @param {Parallel} parallel
  * @param {BridgeCardState} [state]
@@ -100,12 +143,7 @@ export function bridgeSection(parallel, state) {
   wrap.className = "parallel__bridge";
 
   if (!state) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "parallel__bridge-button";
-    button.dataset.bridgeUrl = parallel.url;
-    button.textContent = BRIDGE_BUTTON_LABEL;
-    wrap.append(button);
+    wrap.append(bridgeButton(parallel, BRIDGE_BUTTON_LABEL));
     return wrap;
   }
 
@@ -115,7 +153,10 @@ export function bridgeSection(parallel, state) {
   }
 
   if (state.status === "error") {
-    wrap.append(para("parallel__bridge-pending", state.message, true));
+    wrap.append(
+      para("parallel__bridge-error", BRIDGE_FAILURE_MESSAGE, true),
+      bridgeButton(parallel, BRIDGE_RETRY_LABEL),
+    );
     return wrap;
   }
 
