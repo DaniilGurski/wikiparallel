@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WikiParallel — Settings</title>
+    <meta
+      name="description"
+      content="Store the Anthropic API key used to generate Bridges. The key stays in this browser."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./src/settings-main.js"></script>
+  </head>
+  <body>
+    <div class="page">
+      <header class="masthead">
+        <h1>Settings</h1>
+        <p class="tagline">
+          The Anthropic API key used to generate Bridges. Search never needs a
+          key and is unaffected by anything here.
+        </p>
+        <p class="masthead__nav"><a href="./index.html">← Back to search</a></p>
+      </header>
+
+      <main>
+        <form id="api-key-form" class="settings" novalidate>
+          <div class="field">
+            <label for="api-key">Anthropic API key</label>
+            <input
+              id="api-key"
+              name="apiKey"
+              type="password"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              placeholder="sk-ant-…"
+              aria-describedby="api-key-hint"
+            />
+            <p id="api-key-hint" class="hint">
+              Stored in this browser only, in <code>localStorage</code>. It is
+              sent only to Anthropic when you ask for a Bridge, and to nowhere
+              else.
+            </p>
+          </div>
+
+          <div class="settings__actions">
+            <button type="submit" id="save-key">Save key</button>
+            <button type="button" id="forget-key">Forget key</button>
+          </div>
+
+          <p
+            id="settings-status"
+            class="settings__status"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </form>
+
+        <section class="settings__note">
+          <h2>Where a key comes from</h2>
+          <p>
+            Create a key in the
+            <a
+              href="https://console.anthropic.com/settings/keys"
+              rel="noopener"
+              target="_blank"
+              >Anthropic Console</a
+            >. The account needs credit on it — Anthropic has no free tier, so a
+            fresh clone cannot show Bridges until someone adds a funded key here.
+          </p>
+        </section>
+      </main>
+
+      <footer class="colophon">
+        <p><a href="./index.html">← Back to search</a></p>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -80,6 +80,92 @@ a:visited {
   font-size: 1.02rem;
 }
 
+.masthead__nav {
+  margin: 0.75rem 0 0;
+  font-family: var(--sans);
+  font-size: 0.9rem;
+}
+
+/* Settings ------------------------------------------------------------------- */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 2.5rem;
+}
+
+.settings input[type="password"],
+.settings input[type="text"] {
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0.55rem 0.65rem;
+  width: 100%;
+}
+
+.settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+#save-key {
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--paper);
+  background: var(--accent);
+  border: 1px solid var(--focus);
+  border-radius: 2px;
+  padding: 0.55rem 1.3rem;
+  cursor: pointer;
+}
+
+#forget-key {
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--link);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0.55rem 1.3rem;
+  cursor: pointer;
+}
+
+#forget-key:disabled {
+  color: var(--ink-soft);
+  border-color: var(--rule-soft);
+  cursor: not-allowed;
+}
+
+.settings__status {
+  margin: 0;
+  min-height: 1.6rem;
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.settings__note {
+  border-top: 1px solid var(--rule-soft);
+  padding-top: 1.5rem;
+}
+
+.settings__note h2 {
+  font-family: var(--sans);
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+
+.settings__note p {
+  margin: 0;
+}
+
 /* Search form ----------------------------------------------------------------- */
 
 .search {

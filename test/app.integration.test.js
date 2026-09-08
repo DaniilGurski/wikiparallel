@@ -319,3 +319,11 @@ test("with corpus.json absent, the app shows an explicit build-the-Corpus messag
 test("the CC BY-SA attribution notice is on the page", () => {
   assert.match($(".colophon").textContent ?? "", /CC BY-SA/);
 });
+
+test("the search page links to the settings page", () => {
+  const hrefs = [...window.document.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+  assert.ok(
+    hrefs.some((h) => /(^|\/)settings\.html$/.test(h ?? "")),
+    "a link to settings.html",
+  );
+});
