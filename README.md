@@ -22,8 +22,16 @@ i din Challenge lämnar aldrig datorn (se
 ## Frågor
 
 - Vilken ny AI-teknik/bibliotek identifierade ni och hur tillämpade ni det?
+  Svar:
+  En AI-teknik som vi använde var embeddings (gte-small från hugging face). Det används för att matcha användarens utmaning med 1000 embeddade artiklar från Wikipedia. Dock, istället för att bara beräkna cosine similarity har vi några regler för att säkerställa att användaren faktiskt får paralleler från andra områden. Förutom det används generativ AI för att generera förklarningar till en valfri parallel. I vår utvecklings workflow utnyttjade vi Matt Pocock skills för att forma ideen, dokumentera design beslut, definera domain språk osv.
+
 - Motivera varför ni valde den AI-tekniken/det biblioteket.
+  Svar:
+  Eftersom vi inte har någon backend utan istället kör allt på klientsidan ville vi ha en lättvikt embeddingsmodell som också kunde hantera uppgiften tillräckligt effektivt. Den embeddingsmodellen vi valde var `gte-small`. För generativ AI valde vi Anthropic SDK eftersom det var enklast att implementera med tanke på vår arbetsflöde, där vi redan använde Claude.
+
 - Varför behövdes AI-komponenten? Skulle ni kunna löst det på ett annat sätt?
+  Svar:
+  Generativ AI ingick till exempel inte i våra planer från början. Utan den skulle det ta ännu längre tid för användaren att hitta likheter med sin utmaning. Generativ AI var alltså ett steg mot en bättre UX, men inte nödvändigtvis mot den övergripande funktionaliteten.
 
 ## Förutsättningar
 
